@@ -319,12 +319,20 @@ class MessengerServer:
 
                     if group_name in self.group_chats and username in self.group_chats[group_name]['members']:
                         members = self.group_chats[group_name]['members']
+                        # Создаем список участников с их IP-адресами
+                        members_with_ip = []
+                        for member in members:
+                            members_with_ip.append({
+                                'username': member,
+                                'ip': self.get_user_ip(member)
+                            })
+                        
                         response = {
                             'type': 'group_members',
                             'group_name': group_name,
-                            'members': members
+                            'members': members_with_ip
                         }
-                        client_socket.send(json.dumps(response).encode('utf-8'))
+                        client_socket.send(json.dumps(response, ensure_ascii=False).encode('utf-8'))
                         self.logger.info(f"Пользователь {username} запросил список участников группы {group_name}")
 
                 elif msg_type == 'rename_group':

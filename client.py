@@ -19,7 +19,7 @@ class MessengerClient:
         self.pending_messages = {}  # message_id -> message data
         self.group_creators = {}  # group_name -> creator
         self.user_ips = {}  # username -> IP mapping
-        self.group_members = {}  # group_name -> list of members
+        self.group_members = {}  # group_name -> list of members with IPs
 
         self.setup_gui()
         self.connect_to_server()
@@ -251,7 +251,7 @@ class MessengerClient:
         """Показать окно со списком участников группы"""
         members_window = tk.Toplevel(self.root)
         members_window.title(f"Участники группы: {group_name}")
-        members_window.geometry("300x400")
+        members_window.geometry("400x500")
         members_window.configure(bg=self.colors['light'])
         members_window.resizable(False, False)
 
@@ -290,23 +290,33 @@ class MessengerClient:
         # Отображаем участников
         if group_name in self.group_members:
             members = self.group_members[group_name]
-            for i, member in enumerate(members):
+            for i, member_info in enumerate(members):
                 member_frame = ttk.Frame(scrollable_frame, style='TFrame')
                 member_frame.pack(fill=tk.X, padx=5, pady=2)
 
-                # Цвет создателя группы
-                creator_color = self.colors['warning'] if member == self.group_creators.get(group_name) else self.colors['dark']
+                username = member_info['username']
+                user_ip = member_info['ip']
                 
-                member_label = ttk.Label(member_frame, text=member, font=('Arial', 10))
-                if member == self.group_creators.get(group_name):
-                    member_label.configure(text=f"{member} (создатель)", foreground=creator_color)
-                else:
-                    member_label.configure(text=member)
+                # Цвет создателя группы
+                is_creator = username == self.group_creators.get(group_name)
+                creator_color = self.colors['warning'] if is_creator else self.colors['dark']
+                
+                # Информация о пользователе
+                user_info = f"{username} (IP: {user_ip})"
+                if is_creator:
+                    user_info += " - создатель"
+                
+                member_label = ttk.Label(member_frame, text=user_info, font=('Arial', 10))
+                member_label.configure(foreground=creator_color)
                 member_label.pack(side=tk.LEFT)
 
-                if member == self.username:
+                if username == self.username:
                     you_label = ttk.Label(member_frame, text=" (Вы)", foreground=self.colors['accent'])
                     you_label.pack(side=tk.LEFT)
+        else:
+            # Если участники еще не загружены, показываем сообщение
+            loading_label = ttk.Label(scrollable_frame, text="Загрузка участников...")
+            loading_label.pack(pady=10)
 
         # Кнопка закрытия
         close_button = ttk.Button(members_window, text="Закрыть", 
@@ -320,7 +330,10 @@ class MessengerClient:
             'group_name': group_name,
             'username': self.username
         }
-        self.socket.send(json.dumps(message).encode('utf-8'))
+        try:
+            self.socket.send(json.dumps(message).encode('utf-8'))
+        except Exception as e:
+            messagebox.showerror("Ошибка", f"Не удалось запросить список участников: {e}")
 
     def select_chat(self, chat_name, chat_type, chat_data):
         """Выбор чата"""
@@ -794,6 +807,7 @@ class MessengerClient:
                     group_name = message['group_name']
                     members = message['members']
                     self.group_members[group_name] = members
+                    self.status_var.set(f"Получен список участников группы {group_name}")
 
             except Exception as e:
                 self.status_var.set(f"Ошибка получения сообщения: {e}")
