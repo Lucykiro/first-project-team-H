@@ -19,6 +19,7 @@ class MessengerClient:
         self.pending_messages = {}  # message_id -> message data
         self.group_creators = {}  # group_name -> creator
         self.user_ips = {}  # username -> IP mapping
+        self.group_members = {}  # group_name -> list of members
 
         self.setup_gui()
         self.connect_to_server()
@@ -34,38 +35,67 @@ class MessengerClient:
             return "127.0.0.1"
 
     def setup_gui(self):
+        # Настройка цветовой схемы
+        self.colors = {
+            'primary': '#2c3e50',
+            'secondary': '#34495e',
+            'accent': '#3498db',
+            'success': '#2ecc71',
+            'warning': '#f39c12',
+            'danger': '#e74c3c',
+            'light': '#ecf0f1',
+            'dark': '#2c3e50',
+            'text_light': '#ffffff',
+            'text_dark': '#2c3e50'
+        }
+
         self.root = tk.Tk()
         self.root.title("Messenger")
         self.root.geometry("800x650")
+        self.root.configure(bg=self.colors['light'])
         self.root.protocol("WM_DELETE_WINDOW", self.exit_app)
 
+        # Стили для ttk
+        self.style = ttk.Style()
+        self.style.theme_use('clam')
+        
+        # Настройка стилей
+        self.style.configure('TFrame', background=self.colors['light'])
+        self.style.configure('TLabel', background=self.colors['light'], foreground=self.colors['dark'])
+        self.style.configure('TButton', background=self.colors['accent'], foreground=self.colors['text_light'])
+        self.style.configure('Primary.TButton', background=self.colors['primary'], foreground=self.colors['text_light'])
+        self.style.configure('Secondary.TButton', background=self.colors['secondary'], foreground=self.colors['text_light'])
+        self.style.configure('TEntry', fieldbackground=self.colors['light'])
+        self.style.configure('TCanvas', background=self.colors['light'])
+        self.style.configure('TScrollbar', background=self.colors['secondary'])
+
         # Регистрация
-        self.login_frame = ttk.Frame(self.root)
+        self.login_frame = ttk.Frame(self.root, style='TFrame')
         self.login_frame.pack(pady=50)
 
-        ttk.Label(self.login_frame, text="Введите ваше имя:").pack(pady=5)
-        self.username_entry = ttk.Entry(self.login_frame, width=30)
-        self.username_entry.pack(pady=5)
+        ttk.Label(self.login_frame, text="Введите ваше имя:", font=('Arial', 12, 'bold')).pack(pady=10)
+        self.username_entry = ttk.Entry(self.login_frame, width=30, font=('Arial', 11))
+        self.username_entry.pack(pady=10)
         self.username_entry.bind('<Return>', lambda e: self.register_user())
 
-        ttk.Button(self.login_frame, text="Войти", command=self.register_user).pack(pady=10)
+        ttk.Button(self.login_frame, text="Войти", command=self.register_user, style='Primary.TButton').pack(pady=10)
 
         # Основной интерфейс
-        self.main_frame = ttk.Frame(self.root)
+        self.main_frame = ttk.Frame(self.root, style='TFrame')
 
         # Верхняя панель
-        top_frame = ttk.Frame(self.main_frame)
+        top_frame = ttk.Frame(self.main_frame, style='TFrame')
         top_frame.pack(fill=tk.X, padx=10, pady=5)
 
         self.user_label = ttk.Label(top_frame, text="", font=('Arial', 10, 'bold'))
         self.user_label.pack(side=tk.LEFT)
 
         # Кнопка добавления чатов
-        self.add_button = ttk.Button(top_frame, text="+ Добавить чат", command=self.show_add_menu)
+        self.add_button = ttk.Button(top_frame, text="+ Добавить чат", command=self.show_add_menu, style='Secondary.TButton')
         self.add_button.pack(side=tk.RIGHT, padx=(5, 0))
 
         # Кнопка выхода
-        self.exit_button = ttk.Button(top_frame, text="Выйти", command=self.exit_app)
+        self.exit_button = ttk.Button(top_frame, text="Выйти", command=self.exit_app, style='TButton')
         self.exit_button.pack(side=tk.RIGHT)
 
         # Основной контейнер с разделением на чаты и сообщения
@@ -73,13 +103,13 @@ class MessengerClient:
         main_container.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
 
         # Левая панель - список чатов
-        left_frame = ttk.Frame(main_container)
+        left_frame = ttk.Frame(main_container, style='TFrame')
         main_container.add(left_frame, weight=1)
 
         ttk.Label(left_frame, text="Чаты:", font=('Arial', 11, 'bold')).pack(anchor=tk.W, pady=(0, 5))
 
         # Поиск чатов
-        search_frame = ttk.Frame(left_frame)
+        search_frame = ttk.Frame(left_frame, style='TFrame')
         search_frame.pack(fill=tk.X, pady=(0, 5))
         ttk.Label(search_frame, text="Поиск:").pack(side=tk.LEFT)
         self.search_entry = ttk.Entry(search_frame)
@@ -87,13 +117,13 @@ class MessengerClient:
         self.search_entry.bind('<KeyRelease>', self.filter_chats)
 
         # Список чатов с прокруткой
-        chat_list_frame = ttk.Frame(left_frame)
+        chat_list_frame = ttk.Frame(left_frame, style='TFrame')
         chat_list_frame.pack(fill=tk.BOTH, expand=True)
 
         # Создаем Canvas и Scrollbar для кастомного списка чатов
-        self.chat_canvas = tk.Canvas(chat_list_frame, bg='white')
+        self.chat_canvas = tk.Canvas(chat_list_frame, bg=self.colors['light'], highlightthickness=0)
         scrollbar_chats = ttk.Scrollbar(chat_list_frame, orient=tk.VERTICAL, command=self.chat_canvas.yview)
-        self.chat_scrollable_frame = ttk.Frame(self.chat_canvas)
+        self.chat_scrollable_frame = ttk.Frame(self.chat_canvas, style='TFrame')
 
         self.chat_scrollable_frame.bind(
             "<Configure>",
@@ -109,7 +139,7 @@ class MessengerClient:
         scrollbar_chats.pack(side=tk.RIGHT, fill=tk.Y)
 
         # Правая панель - сообщения
-        right_frame = ttk.Frame(main_container)
+        right_frame = ttk.Frame(main_container, style='TFrame')
         main_container.add(right_frame, weight=2)
 
         # Заголовок текущего чата
@@ -117,10 +147,12 @@ class MessengerClient:
         self.chat_title.pack(anchor=tk.W, pady=(0, 10))
 
         # Область сообщений с прокруткой
-        messages_frame = ttk.Frame(right_frame)
+        messages_frame = ttk.Frame(right_frame, style='TFrame')
         messages_frame.pack(fill=tk.BOTH, expand=True)
 
-        self.chat_area = tk.Text(messages_frame, state=tk.DISABLED, font=('Arial', 10))
+        self.chat_area = tk.Text(messages_frame, state=tk.DISABLED, font=('Arial', 10), 
+                                bg=self.colors['light'], fg=self.colors['dark'],
+                                relief='flat', padx=10, pady=10)
         scrollbar_messages = ttk.Scrollbar(messages_frame, orient=tk.VERTICAL, command=self.chat_area.yview)
         self.chat_area.config(yscrollcommand=scrollbar_messages.set)
 
@@ -128,7 +160,7 @@ class MessengerClient:
         scrollbar_messages.pack(side=tk.RIGHT, fill=tk.Y)
 
         # Панель ввода сообщения
-        input_frame = ttk.Frame(right_frame)
+        input_frame = ttk.Frame(right_frame, style='TFrame')
         input_frame.pack(fill=tk.X, pady=(10, 0))
 
         self.message_entry = ttk.Entry(input_frame, font=('Arial', 10))
@@ -136,7 +168,7 @@ class MessengerClient:
         self.message_entry.bind('<Return>', lambda e: self.send_message())
         self.message_entry.config(state='disabled')
 
-        self.send_button = ttk.Button(input_frame, text="Отправить", command=self.send_message)
+        self.send_button = ttk.Button(input_frame, text="Отправить", command=self.send_message, style='Primary.TButton')
         self.send_button.pack(side=tk.RIGHT)
         self.send_button.config(state='disabled')
 
@@ -147,7 +179,7 @@ class MessengerClient:
         # Статусная строка
         self.status_var = tk.StringVar()
         self.status_var.set("Не подключено")
-        status_bar = ttk.Label(self.main_frame, textvariable=self.status_var, relief=tk.SUNKEN)
+        status_bar = ttk.Label(self.main_frame, textvariable=self.status_var, relief=tk.SUNKEN, style='TLabel')
         status_bar.pack(fill=tk.X, side=tk.BOTTOM, padx=10, pady=5)
 
         # Словарь для хранения виджетов чатов
@@ -155,7 +187,7 @@ class MessengerClient:
 
     def create_chat_widget(self, chat_name, chat_type, chat_data, creator=None):
         """Создание виджета для чата с меню"""
-        chat_frame = ttk.Frame(self.chat_scrollable_frame)
+        chat_frame = ttk.Frame(self.chat_scrollable_frame, style='TFrame')
         chat_frame.pack(fill=tk.X, padx=5, pady=2)
 
         # Основная кнопка чата
@@ -163,7 +195,8 @@ class MessengerClient:
             chat_frame,
             text=chat_name,
             command=lambda: self.select_chat(chat_name, chat_type, chat_data),
-            width=30
+            width=30,
+            style='TButton'
         )
         chat_button.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
@@ -187,30 +220,107 @@ class MessengerClient:
 
     def show_chat_menu(self, chat_name, chat_type, chat_data, menu_button, creator=None):
         """Показать меню для чата/группы"""
-        menu = tk.Menu(self.root, tearoff=0)
+        menu = tk.Menu(self.root, tearoff=0, bg=self.colors['light'], fg=self.colors['dark'])
 
         if chat_type == 'group':
             # Для групп проверяем, является ли пользователь создателем
             is_creator = (self.username == creator)
 
             if is_creator:
-                # Для создателя: переименование и удаление
                 menu.add_command(label="Переименовать",
                                  command=lambda: self.rename_group(chat_name, chat_data))
                 menu.add_command(label="Удалить группу",
                                  command=lambda: self.delete_group(chat_name, chat_data))
             else:
-                # Для участника: только покинуть группу
                 menu.add_command(label="Покинуть группу",
                                  command=lambda: self.leave_group(chat_name, chat_data))
+            
+            # Добавляем пункт для просмотра участников
+            menu.add_separator()
+            menu.add_command(label="Участники",
+                           command=lambda: self.show_group_members(chat_data))
         else:
-            # Для личных чатов только удаление
             menu.add_command(label="Удалить чат",
                              command=lambda: self.delete_private_chat(chat_name, chat_data))
 
         # Показываем меню рядом с кнопкой
         menu.tk_popup(menu_button.winfo_rootx(),
                       menu_button.winfo_rooty() + menu_button.winfo_height())
+
+    def show_group_members(self, group_name):
+        """Показать окно со списком участников группы"""
+        members_window = tk.Toplevel(self.root)
+        members_window.title(f"Участники группы: {group_name}")
+        members_window.geometry("300x400")
+        members_window.configure(bg=self.colors['light'])
+        members_window.resizable(False, False)
+
+        # Центрируем окно
+        members_window.transient(self.root)
+        members_window.grab_set()
+
+        # Заголовок
+        title_label = ttk.Label(members_window, text=f"Участники группы '{group_name}':", 
+                               font=('Arial', 12, 'bold'))
+        title_label.pack(pady=10)
+
+        # Прокручиваемый список участников
+        members_frame = ttk.Frame(members_window, style='TFrame')
+        members_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+
+        # Canvas для прокрутки
+        canvas = tk.Canvas(members_frame, bg=self.colors['light'], highlightthickness=0)
+        scrollbar = ttk.Scrollbar(members_frame, orient=tk.VERTICAL, command=canvas.yview)
+        scrollable_frame = ttk.Frame(canvas, style='TFrame')
+
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        # Запрашиваем список участников у сервера
+        self.request_group_members(group_name)
+
+        # Отображаем участников
+        if group_name in self.group_members:
+            members = self.group_members[group_name]
+            for i, member in enumerate(members):
+                member_frame = ttk.Frame(scrollable_frame, style='TFrame')
+                member_frame.pack(fill=tk.X, padx=5, pady=2)
+
+                # Цвет создателя группы
+                creator_color = self.colors['warning'] if member == self.group_creators.get(group_name) else self.colors['dark']
+                
+                member_label = ttk.Label(member_frame, text=member, font=('Arial', 10))
+                if member == self.group_creators.get(group_name):
+                    member_label.configure(text=f"{member} (создатель)", foreground=creator_color)
+                else:
+                    member_label.configure(text=member)
+                member_label.pack(side=tk.LEFT)
+
+                if member == self.username:
+                    you_label = ttk.Label(member_frame, text=" (Вы)", foreground=self.colors['accent'])
+                    you_label.pack(side=tk.LEFT)
+
+        # Кнопка закрытия
+        close_button = ttk.Button(members_window, text="Закрыть", 
+                                 command=members_window.destroy, style='Primary.TButton')
+        close_button.pack(pady=10)
+
+    def request_group_members(self, group_name):
+        """Запрос списка участников группы у сервера"""
+        message = {
+            'type': 'get_group_members',
+            'group_name': group_name,
+            'username': self.username
+        }
+        self.socket.send(json.dumps(message).encode('utf-8'))
 
     def select_chat(self, chat_name, chat_type, chat_data):
         """Выбор чата"""
@@ -382,7 +492,7 @@ class MessengerClient:
         self.user_label.config(text=f"{self.username} (локальный: {self.user_ip}, серверный: {server_ip})")
 
     def show_add_menu(self):
-        menu = tk.Menu(self.root, tearoff=0)
+        menu = tk.Menu(self.root, tearoff=0, bg=self.colors['light'], fg=self.colors['dark'])
         menu.add_command(label="Личный чат", command=self.add_private_chat)
         menu.add_command(label="Создать группу", command=self.create_group)
         menu.add_command(label="Вступить в группу", command=self.join_group)
@@ -678,6 +788,12 @@ class MessengerClient:
                         # При присоединении создатель неизвестен, будет обновлено в chats_update
                         self.create_chat_widget(chat_name, 'group', group_name)
                         self.group_chats[chat_name] = group_name
+
+                elif msg_type == 'group_members':
+                    # Получение списка участников группы
+                    group_name = message['group_name']
+                    members = message['members']
+                    self.group_members[group_name] = members
 
             except Exception as e:
                 self.status_var.set(f"Ошибка получения сообщения: {e}")

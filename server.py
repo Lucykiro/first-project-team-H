@@ -312,6 +312,21 @@ class MessengerServer:
                     }
                     client_socket.send(json.dumps(response, ensure_ascii=False).encode('utf-8'))
 
+                elif msg_type == 'get_group_members':
+                    """Обработка запроса списка участников группы"""
+                    group_name = message['group_name']
+                    username = message['username']
+
+                    if group_name in self.group_chats and username in self.group_chats[group_name]['members']:
+                        members = self.group_chats[group_name]['members']
+                        response = {
+                            'type': 'group_members',
+                            'group_name': group_name,
+                            'members': members
+                        }
+                        client_socket.send(json.dumps(response).encode('utf-8'))
+                        self.logger.info(f"Пользователь {username} запросил список участников группы {group_name}")
+
                 elif msg_type == 'rename_group':
                     group_name = message['group_name']
                     new_name = message['new_name']
