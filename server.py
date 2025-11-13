@@ -78,7 +78,7 @@ class MessengerServer:
         except json.JSONDecodeError as e:
             self.logger.error(f"Ошибка декодирования JSON: {e}")
             self.logger.info("Создаются новые данные по умолчанию")
-            # Создаем резервную копию поврежденного файла
+            # Создаем резервную копию поврежденного файлаh
             if os.path.exists('server_data.json'):
                 backup_name = f"server_data_backup_{int(datetime.now().timestamp())}.json"
                 os.rename('server_data.json', backup_name)
