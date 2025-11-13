@@ -13,7 +13,7 @@ class MessengerClient:
         self.socket = None
         self.username = None
         self.user_ip = self.get_local_ip()
-        self.server_ip = None  # IP, который видит серверр
+        self.server_ip = None  # IP, который видит сервер
         self.private_chats = {}  # chat_display_name -> username
         self.group_chats = {}  # chat_display_name -> group_name
         self.chat_history = {}  # chat_id -> list of messages (локальное хранение)
@@ -935,3 +935,4 @@ if __name__ == "__main__":
     client = MessengerClient()
 
     client.run()
+
