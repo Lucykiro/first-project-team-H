@@ -911,7 +911,7 @@ class MessengerClient:
                 self.current_chat not in self.private_chats and
                 self.current_chat not in self.group_chats):
             self.deselect_chat()
-        # Если текущий чат все еще существует, обновляем заголовок
+        # Если текущий чат все еще существует, обновляем заголовок ntc
         elif self.current_chat_type == 'private' and self.current_chat in self.private_chats:
             user_local_ip = self.user_ips.get(self.current_chat_id, 'Неизвестно')
             user_server_ip = self.user_server_ips.get(self.current_chat_id, 'Неизвестно')
