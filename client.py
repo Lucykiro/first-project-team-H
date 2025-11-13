@@ -20,6 +20,7 @@ class MessengerClient:
         self.group_creators = {}  # group_name -> creator
         self.user_ips = {}  # username -> IP mapping
         self.group_members = {}  # group_name -> list of members with IPs
+        self.pending_member_requests = set()  # group_name для которых запрошены участники
 
         self.setup_gui()
         self.connect_to_server()
@@ -251,7 +252,7 @@ class MessengerClient:
         """Показать окно со списком участников группы"""
         members_window = tk.Toplevel(self.root)
         members_window.title(f"Участники группы: {group_name}")
-        members_window.geometry("400x500")
+        members_window.geometry("500x500")
         members_window.configure(bg=self.colors['light'])
         members_window.resizable(False, False)
 
@@ -285,43 +286,91 @@ class MessengerClient:
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
         # Запрашиваем список участников у сервера
-        self.request_group_members(group_name)
+        if group_name not in self.pending_member_requests:
+            self.pending_member_requests.add(group_name)
+            self.request_group_members(group_name)
 
-        # Отображаем участников
-        if group_name in self.group_members:
-            members = self.group_members[group_name]
-            for i, member_info in enumerate(members):
-                member_frame = ttk.Frame(scrollable_frame, style='TFrame')
-                member_frame.pack(fill=tk.X, padx=5, pady=2)
+        # Функция для обновления списка участников
+        def update_members_display():
+            # Очищаем текущий список
+            for widget in scrollable_frame.winfo_children():
+                widget.destroy()
 
-                username = member_info['username']
-                user_ip = member_info['ip']
-                
-                # Цвет создателя группы
-                is_creator = username == self.group_creators.get(group_name)
-                creator_color = self.colors['warning'] if is_creator else self.colors['dark']
-                
-                # Информация о пользователе
-                user_info = f"{username} (IP: {user_ip})"
-                if is_creator:
-                    user_info += " - создатель"
-                
-                member_label = ttk.Label(member_frame, text=user_info, font=('Arial', 10))
-                member_label.configure(foreground=creator_color)
-                member_label.pack(side=tk.LEFT)
+            # Отображаем участников
+            if group_name in self.group_members:
+                members = self.group_members[group_name]
+                for member_info in members:
+                    member_frame = ttk.Frame(scrollable_frame, style='TFrame')
+                    member_frame.pack(fill=tk.X, padx=5, pady=2)
 
-                if username == self.username:
-                    you_label = ttk.Label(member_frame, text=" (Вы)", foreground=self.colors['accent'])
-                    you_label.pack(side=tk.LEFT)
-        else:
-            # Если участники еще не загружены, показываем сообщение
-            loading_label = ttk.Label(scrollable_frame, text="Загрузка участников...")
-            loading_label.pack(pady=10)
+                    username = member_info['username']
+                    user_ip = member_info['ip']
+                    
+                    # Цвет создателя группы
+                    is_creator = username == self.group_creators.get(group_name)
+                    creator_color = self.colors['warning'] if is_creator else self.colors['dark']
+                    
+                    # Информация о пользователе
+                    user_info = f"{username} (IP: {user_ip})"
+                    if is_creator:
+                        user_info += " - создатель"
+                    
+                    # Создаем кликабельную метку для участника
+                    member_label = ttk.Label(
+                        member_frame, 
+                        text=user_info, 
+                        font=('Arial', 10),
+                        cursor="hand2"
+                    )
+                    member_label.configure(foreground=creator_color)
+                    member_label.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+                    # Делаем метку кликабельной
+                    member_label.bind('<Button-1>', 
+                                    lambda e, u=username: self.create_private_chat_from_member(u))
+
+                    if username == self.username:
+                        you_label = ttk.Label(member_frame, text=" (Вы)", foreground=self.colors['accent'])
+                        you_label.pack(side=tk.LEFT)
+            else:
+                # Если участники еще не загружены, показываем сообщение
+                loading_label = ttk.Label(scrollable_frame, text="Загрузка участников...")
+                loading_label.pack(pady=10)
+
+                # Планируем повторную проверку через 0.5 секунды
+                members_window.after(500, update_members_display)
+
+        # Первоначальное отображение
+        update_members_display()
+
+        # Функция для обновления при получении данных
+        def on_members_update():
+            if group_name in self.group_members:
+                update_members_display()
+            else:
+                members_window.after(100, on_members_update)
+
+        # Запускаем отслеживание обновлений
+        on_members_update()
 
         # Кнопка закрытия
         close_button = ttk.Button(members_window, text="Закрыть", 
                                  command=members_window.destroy, style='Primary.TButton')
         close_button.pack(pady=10)
+
+    def create_private_chat_from_member(self, username):
+        """Создание личного чата с участником группы"""
+        if username == self.username:
+            messagebox.showinfo("Информация", "Нельзя создать чат с самим собой")
+            return
+
+        chat_name = f"Личный: {username}"
+        if chat_name not in self.chat_widgets:
+            self.create_chat_widget(chat_name, 'private', username)
+            self.private_chats[chat_name] = username
+            messagebox.showinfo("Успех", f"Создан чат с {username}")
+        else:
+            messagebox.showinfo("Информация", f"Чат с {username} уже существует")
 
     def request_group_members(self, group_name):
         """Запрос списка участников группы у сервера"""
@@ -807,6 +856,11 @@ class MessengerClient:
                     group_name = message['group_name']
                     members = message['members']
                     self.group_members[group_name] = members
+                    
+                    # Убираем группу из ожидающих запросов
+                    if group_name in self.pending_member_requests:
+                        self.pending_member_requests.remove(group_name)
+                    
                     self.status_var.set(f"Получен список участников группы {group_name}")
 
             except Exception as e:

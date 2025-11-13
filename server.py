@@ -319,12 +319,27 @@ class MessengerServer:
 
                     if group_name in self.group_chats and username in self.group_chats[group_name]['members']:
                         members = self.group_chats[group_name]['members']
-                        # Создаем список участников с их IP-адресами
+                        # Создаем список участников с их реальными IP-адресами
                         members_with_ip = []
                         for member in members:
+                            # Получаем реальный IP пользователя из данных подключения, если онлайн
+                            member_ip = 'Неизвестно'
+                            if member in self.clients:
+                                # Получаем реальный IP из сокета
+                                try:
+                                    member_socket = self.clients[member]
+                                    member_address = member_socket.getpeername()
+                                    member_ip = member_address[0]
+                                except:
+                                    # Если не удалось получить реальный IP, используем сохраненный
+                                    member_ip = self.get_user_ip(member)
+                            else:
+                                # Если пользователь оффлайн, используем сохраненный IP
+                                member_ip = self.get_user_ip(member)
+                            
                             members_with_ip.append({
                                 'username': member,
-                                'ip': self.get_user_ip(member)
+                                'ip': member_ip
                             })
                         
                         response = {
